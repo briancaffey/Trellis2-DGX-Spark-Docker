@@ -33,4 +33,12 @@ APP_SCRIPT=app_texturing.py docker compose up
 echo "APP_SCRIPT=app_texturing.py" >> .env
 ```
 
+### HTTP API (FastAPI)
+A REST service for programmatic image-to-3D generation (returns GLB/OBJ/PLY/STL,
+optionally GGUF-quantized weights). See [API.md](API.md).
+```bash
+docker compose up --build api          # http://localhost:8000  (docs at /docs)
+curl -X POST http://localhost:8000/generate -F image=@chair.png -o chair.glb
+```
+
 **Note:** First build takes time (CUDA compilation + model downloads).

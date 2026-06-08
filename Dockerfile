@@ -78,6 +78,10 @@ RUN pip install /tmp/extensions/CuMesh --no-build-isolation
 RUN pip install /tmp/extensions/FlexGEMM --no-build-isolation
 RUN pip install /tmp/extensions/TRELLIS.2/o-voxel --no-build-isolation
 
+# Install FastAPI service dependencies (see api/ and requirements-api.txt)
+COPY requirements-api.txt /tmp/requirements-api.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-api.txt
+
 # Set working directory
 WORKDIR /workspace/TRELLIS.2
 

@@ -29,8 +29,15 @@ echo "========================================"
 APP_SCRIPT=${APP_SCRIPT:-app.py}
 
 # Run the specified app or custom command
-if [ $# -eq 0 ]; then
-  exec python "$APP_SCRIPT"
-else
+if [ $# -gt 0 ]; then
   exec "$@"
+elif [ "$APP_SCRIPT" = "api" ]; then
+  # FastAPI service. The ./api package is mounted at /workspace/TRELLIS.2/api so
+  # that both `api.server` and `trellis2` are importable from this working dir.
+  API_HOST=${API_HOST:-${GRADIO_SERVER_NAME:-0.0.0.0}}
+  API_PORT=${API_PORT:-${GRADIO_SERVER_PORT:-7860}}
+  echo "Starting FastAPI service on ${API_HOST}:${API_PORT}"
+  exec uvicorn api.server:app --host "$API_HOST" --port "$API_PORT" --workers 1
+else
+  exec python "$APP_SCRIPT"
 fi

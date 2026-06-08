@@ -1,0 +1,7 @@
+# Extra dependencies for the FastAPI service (api/). The heavy stack (torch,
+# trellis2, trimesh, opencv, imageio, huggingface_hub) is already installed in
+# the base image by the Dockerfile.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+gguf>=0.10.0
