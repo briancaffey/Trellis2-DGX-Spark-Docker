@@ -7,3 +7,7 @@ triton_cache/*
 tmp_files/*
 !tmp_files/.gitkeep
 .env
+
+# macOS
+.DS_Store
+samples/

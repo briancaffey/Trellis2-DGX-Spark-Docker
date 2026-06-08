@@ -8,7 +8,6 @@ os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import time
-from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -65,7 +64,11 @@ def _render_preview(mesh, fps: int) -> bytes:
 
 
 def generate(pipeline, image, options: GenerateOptions):
-    """Generate a 3D asset. Returns (metadata: dict, files: OrderedDict[name -> (media_type, bytes)])."""
+    """Generate a 3D asset.
+
+    Returns ``(metadata: dict, files: list[(filename, media_type, bytes)])``.
+    A format like OBJ contributes several files (model.obj/material.mtl/texture).
+    """
     import o_voxel
 
     seed = _resolve_seed(options)
@@ -86,7 +89,7 @@ def generate(pipeline, image, options: GenerateOptions):
     res = latents[2]
     t_sample = time.time() - t0
 
-    files = OrderedDict()
+    files = []  # list of (filename, media_type, bytes)
     mesh_formats = [f for f in options.formats if f != "preview"]
     textured = None
     t_bake = 0.0
@@ -111,12 +114,11 @@ def generate(pipeline, image, options: GenerateOptions):
         )
         t_bake = time.time() - t1
         for fmt in mesh_formats:
-            data = exporters.export_mesh(textured, fmt)
-            files[f"model.{exporters.FILE_EXT[fmt]}"] = (exporters.MEDIA_TYPES[fmt], data)
+            files.extend(exporters.export_files(textured, fmt))
 
     if "preview" in options.formats:
         data = _render_preview(mesh, options.preview_fps)
-        files["preview.mp4"] = (exporters.MEDIA_TYPES["preview"], data)
+        files.append(("preview.mp4", "video/mp4", data))
 
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

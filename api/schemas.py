@@ -5,7 +5,15 @@ from pydantic import BaseModel, Field
 
 Resolution = Literal["512", "1024", "1536"]
 OutputFormat = Literal["glb", "obj", "ply", "stl", "preview"]
-ResponseMode = Literal["binary", "json"]
+
+# How the generated file(s) come back:
+#   auto   - one file -> raw download; multiple -> a single .zip   (default)
+#   zip    - always a single .zip (loose files inside)
+#   files  - raw, UNZIPPED: returns a JSON manifest with a download URL per file
+#            (files are held in memory briefly; good for testing individual files)
+#   json   - a single JSON body with each file base64-encoded inline
+#   binary - deprecated alias for "auto"
+ResponseMode = Literal["auto", "zip", "files", "json", "binary"]
 
 # Accepted quantization values. "bf16" = native weights. The "gguf:*" values map
 # to files in the Aero-Ex/Trellis2-GGUF repo. We expose two friendly aliases plus
@@ -37,8 +45,16 @@ class GenerateOptions(BaseModel):
     texture_size: int = Field(2048, ge=512)
 
     # Output.
-    formats: List[OutputFormat] = Field(default_factory=lambda: ["glb"])
-    response_mode: ResponseMode = "binary"
+    formats: List[OutputFormat] = Field(
+        default_factory=lambda: ["glb"],
+        description="One or more of: glb, obj, ply, stl, preview (turntable mp4).",
+    )
+    response_mode: ResponseMode = Field(
+        "auto",
+        description="auto = raw if single file else zip; zip = always zip; "
+                    "files = unzipped per-file download URLs (JSON manifest); "
+                    "json = base64 inline.",
+    )
 
     # Model selection. None -> use the server's configured default variant.
     quantization: Optional[Quantization] = None
@@ -86,5 +102,23 @@ class FilePayload(BaseModel):
 
 
 class JsonGenerateResponse(BaseModel):
+    """response_mode="json": every file inlined as base64."""
     metadata: dict
     files: List[FilePayload]
+
+
+class FileInfo(BaseModel):
+    """One downloadable file in a `files`-mode manifest."""
+    filename: str
+    media_type: str
+    size_bytes: int
+    url: str = Field(..., description="GET this for the raw, unzipped file bytes.")
+
+
+class ResultManifest(BaseModel):
+    """response_mode="files": metadata + per-file download URLs (no zip)."""
+    job_id: str
+    metadata: dict
+    files: List[FileInfo]
+    expires_in_sec: int
+

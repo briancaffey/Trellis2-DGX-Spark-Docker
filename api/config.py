@@ -27,6 +27,10 @@ MAX_DECIMATION_TARGET = int(os.getenv("TRELLIS2_MAX_DECIMATION_TARGET", "1000000
 # Directory for transient output files (cleaned per request).
 WORK_DIR = os.getenv("TRELLIS2_WORK_DIR", "/tmp/trellis2_api")
 
+# In-memory results store (used by response_mode="files" for per-file downloads).
+RESULTS_TTL_SEC = int(os.getenv("TRELLIS2_RESULTS_TTL_SEC", "3600"))
+RESULTS_MAX_BYTES = int(os.getenv("TRELLIS2_RESULTS_MAX_BYTES", str(2 * 1024 ** 3)))
+
 # HDRI used for the optional turntable preview render. Relative to the TRELLIS.2
 # working directory (the default app ships these under assets/hdri/).
 PREVIEW_HDRI = os.getenv("TRELLIS2_PREVIEW_HDRI", "assets/hdri/forest.exr")

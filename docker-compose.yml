@@ -41,6 +41,9 @@ services:
   trellis2-api:
     build: .
     container_name: trellis2-api
+    # Self-heal: if a request ever crashes the worker (e.g. a CUDA OOM on a large
+    # job), the node comes back automatically instead of going dark.
+    restart: unless-stopped
     user: "${UID}:${GID}"
     volumes:
       - ./TRELLIS.2:/workspace/TRELLIS.2
