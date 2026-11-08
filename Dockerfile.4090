@@ -1,0 +1,70 @@
+# TRELLIS.2 + FastAPI service for x86_64 / RTX 4090 (Ada, sm_89).
+#
+# The spark Dockerfile targets Blackwell (sm_121, torch nightly, flash-attn
+# from source). This one follows upstream's tested Linux recipe instead:
+# torch 2.6.0 + cu124, a PREBUILT flash-attn wheel (no 30-min compile), and
+# the CUDA extensions compiled for sm_89 only. Unlike the spark image, the
+# TRELLIS.2 source and api/ are BAKED IN (no hostPath bind mounts), so the
+# pod only needs an HF cache volume.
+#
+# Build context = this repo root:
+#   docker build -f Dockerfile.4090 -t harbor.lan/apps/trellis2:4090-<sha> .
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      git ca-certificates curl build-essential cmake ninja-build pkg-config \
+      python3.10 python3.10-dev python3.10-venv python3-pip ffmpeg \
+      libgl1 libglib2.0-0 libegl1 libgles2 libjpeg-dev libpng-dev \
+      libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3.10 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -U pip setuptools wheel
+ENV PATH="/opt/venv/bin:${PATH}" \
+    CUDA_HOME=/usr/local/cuda \
+    TORCH_CUDA_ARCH_LIST="8.9" \
+    MAX_JOBS=16 \
+    PIP_PREFER_BINARY=1
+
+RUN pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+
+RUN pip install --no-cache-dir \
+      "https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.6cxx11abiFALSE-cp310-cp310-linux_x86_64.whl"
+
+RUN pip install --no-cache-dir \
+      imageio imageio-ffmpeg tqdm easydict "opencv-python-headless<5" ninja trimesh \
+      "transformers<5" tensorboard pandas lpips zstandard Pillow kornia timm==1.0.12 \
+      "huggingface_hub[hf_xet]" psutil packaging \
+      "fastapi>=0.110" "uvicorn[standard]>=0.27" "python-multipart>=0.0.9" "gguf>=0.10.0" \
+    && pip install --no-cache-dir git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+
+# CUDA extensions (compiled for sm_89; no GPU needed at build time).
+RUN mkdir -p /tmp/ext \
+    && git clone -b v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/ext/nvdiffrast \
+    && git clone -b renderutils https://github.com/JeffreyXiang/nvdiffrec.git /tmp/ext/nvdiffrec \
+    && git clone --recursive https://github.com/JeffreyXiang/CuMesh.git /tmp/ext/CuMesh \
+    && git clone --recursive https://github.com/JeffreyXiang/FlexGEMM.git /tmp/ext/FlexGEMM \
+    && for d in nvdiffrast nvdiffrec CuMesh FlexGEMM; do echo "$d $(git -C /tmp/ext/$d rev-parse HEAD)" >> /opt/ext-shas.txt; done \
+    && pip install --no-build-isolation /tmp/ext/nvdiffrast \
+    && pip install --no-build-isolation /tmp/ext/nvdiffrec \
+    && pip install --no-build-isolation /tmp/ext/CuMesh \
+    && pip install --no-build-isolation /tmp/ext/FlexGEMM
+
+# TRELLIS.2 source (the dr-vij fork checkout this repo pins) + o-voxel, then the API.
+COPY TRELLIS.2 /workspace/TRELLIS.2
+RUN pip install --no-build-isolation /workspace/TRELLIS.2/o-voxel && rm -rf /tmp/ext
+COPY api /workspace/TRELLIS.2/api
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+WORKDIR /workspace/TRELLIS.2
+ENV ATTN_BACKEND=flash_attn \
+    APP_SCRIPT=api \
+    API_HOST=0.0.0.0 \
+    API_PORT=8000 \
+    HF_HOME=/workspace/cache/huggingface \
+    TRITON_CACHE_DIR=/workspace/cache/triton \
+    FLEX_GEMM_AUTOTUNE_CACHE_PATH=/workspace/cache/triton/flex_autotune_cache.json \
+    TORCH_HOME=/workspace/cache/torch
+EXPOSE 8000
+ENTRYPOINT ["/entrypoint.sh"]
